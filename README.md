@@ -16,7 +16,7 @@
 - **Экспорт:** python-docx
 
 ## 🏃‍♂️ Как запустить (Готовый EXE)
-1. Перейдите в раздел [Releases](https://github.com/ТВОЙ_НИК/GRReed-Lite/releases).
+1. Перейдите в раздел [Releases](https://github.com/Donnyu/GRReed-Lite/releases).
 2. Скачайте файл `GRReed.exe`.
 3. Запустите `GRReed.exe` (он сам поднимет локальный сервер).
 4. Откройте в браузере `http://localhost:8000`.
