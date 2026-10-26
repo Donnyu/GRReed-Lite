@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRReed Lite - Распознавание текста</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3498db;
+            border-radius: 50%; width: 30px; height: 30px;
+            animation: spin 1s linear infinite; display: none; margin: 0 auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center py-10 px-4">
+    <div class="max-w-2xl w-full bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700">
+        <h1 class="text-3xl font-bold mb-2 text-center text-blue-400">GRReed Lite</h1>
+        <p class="text-center text-gray-400 mb-2">Загрузите изображение или вставьте скриншот из буфера (Ctrl+V).</p>
+        <p class="text-center text-sm text-gray-500 mb-8">Работает с фото, скриншотами и картинками из галереи.</p>
+
+        <!-- Зона загрузки -->
+        <div class="border-2 border-dashed border-gray-600 rounded-lg p-10 text-center hover:border-blue-500 transition cursor-pointer relative" id="drop-zone">
+            <input type="file" id="file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept="image/*">
+            <p class="text-gray-400">Нажмите, перетащите или нажмите <b>Ctrl+V</b></p>
+            <p class="text-sm text-gray-500 mt-2" id="file-name">Файл не выбран</p>
+        </div>
+
+        <!-- Загрузчик -->
+        <div class="loader mt-6" id="loader"></div>
+
+        <!-- Результат -->
+        <div class="mt-6" id="result-container" style="display: none;">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-xl font-semibold text-green-400">Результат:</h2>
+                <div class="flex gap-2">
+                    <button id="word-btn" class="bg-green-600 hover:bg-green-700 text-white py-1 px-4 rounded text-sm transition">Скачать в Word</button>
+                    <button id="copy-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-4 rounded text-sm transition">Копировать</button>
+                    <button id="clear-btn" class="bg-red-600 hover:bg-red-700 text-white py-1 px-4 rounded text-sm transition">Очистить</button>
+                </div>
+            </div>
+            <textarea id="output-text" class="w-full h-64 bg-gray-900 text-gray-200 p-4 rounded-lg border border-gray-700 focus:outline-none focus:border-blue-500 resize-none whitespace-pre-wrap" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const loader = document.getElementById('loader');
+        const resultContainer = document.getElementById('result-container');
+        const outputText = document.getElementById('output-text');
+        const copyBtn = document.getElementById('copy-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const wordBtn = document.getElementById('word-btn');
+
+        let currentFile = null; // Храним текущий файл для отправки в Word
+
+        async function sendImage(file) {
+            currentFile = file;
+            fileNameDisplay.textContent = `Выбран: ${file.name || 'Вставлено из буфера'}`;
+            loader.style.display = 'block';
+            resultContainer.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/ocr', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    outputText.value = data.text;
+                    resultContainer.style.display = 'block';
+                } else {
+                    alert('Ошибка распознавания: ' + data.message);
+                }
+            } catch (error) {
+                alert('Ошибка сети: ' + error.message);
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) sendImage(file);
+        });
+
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    sendImage(blob);
+                    e.preventDefault();
+                    return;
+                }
+            }
+        });
+
+        // Кнопка "Скачать в Word"
+        wordBtn.addEventListener('click', async () => {
+            if (!currentFile) return;
+
+            const formData = new FormData();
+            formData.append('file', currentFile);
+
+            try {
+                const response = await fetch('/api/ocr-word', { method: 'POST', body: formData });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'GRReed_Result.docx';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } else {
+                    alert('Ошибка при создании Word файла');
+                }
+            } catch (error) {
+                alert('Ошибка сети: ' + error.message);
+            }
+        });
+
+        copyBtn.addEventListener('click', () => {
+            outputText.select();
+            document.execCommand('copy');
+            copyBtn.textContent = 'Скопировано!';
+            setTimeout(() => { copyBtn.textContent = 'Копировать'; }, 2000);
+        });
+
+        clearBtn.addEventListener('click', () => {
+            outputText.value = '';
+            resultContainer.style.display = 'none';
+            fileNameDisplay.textContent = 'Файл не выбран';
+            fileInput.value = ''; 
+            currentFile = null;
+        });
+    </script>
+</body>
+</html>
